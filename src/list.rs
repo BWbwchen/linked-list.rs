@@ -1,46 +1,39 @@
-pub struct List {
-    head: Link,
+pub struct List<T> {
+    head: Link<T>,
 }
+
+type Link<T> = Option<Box<Node<T>>>;
 
 #[derive(Clone)]
-enum Link {
-    Empty,
-    Elem(Box<Node>),
+struct Node<T> {
+    elem: T,
+    next: Link<T>,
 }
 
-#[derive(Clone)]
-struct Node {
-    elem: i32,
-    next: Link,
-}
-
-impl List {
+impl<T> List<T> {
     pub fn new() -> Self {
-        List { head: Link::Empty }
+        List { head: None }
     }
-    pub fn push(&mut self, elem: i32) {
+    pub fn push(&mut self, elem: T) {
         let new_node = Node {
             elem,
-            next: std::mem::replace(&mut self.head, Link::Empty),
+            next: self.head.take(),
         };
-        self.head = Link::Elem(Box::new(new_node));
+        self.head = Some(Box::new(new_node));
     }
-    pub fn pop(&mut self) -> Option<i32> {
-        match std::mem::replace(&mut self.head, Link::Empty) {
-            Link::Empty => None,
-            Link::Elem(e) => {
-                self.head = e.next;
-                Some(e.elem)
-            }
-        }
+    pub fn pop(&mut self) -> Option<T> {
+        self.head.take().map(|e| {
+            self.head = e.next;
+            e.elem
+        })
     }
 }
 
-impl Drop for List {
+impl<T> Drop for List<T> {
     fn drop(&mut self) {
-        let mut cur = std::mem::replace(&mut self.head, Link::Empty);
-        while let Link::Elem(mut e) = cur {
-            cur = std::mem::replace(&mut e.next, Link::Empty);
+        let mut cur = self.head.take();
+        while let Some(mut e) = cur {
+            cur = e.next.take();
         }
     }
 }
