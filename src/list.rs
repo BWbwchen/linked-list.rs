@@ -1,13 +1,13 @@
 pub struct List<T> {
-    head: Link<T>,
+    pub(crate) head: Link<T>,
 }
 
-type Link<T> = Option<Box<Node<T>>>;
+pub(crate) type Link<T> = Option<Box<Node<T>>>;
 
 #[derive(Clone)]
-struct Node<T> {
-    elem: T,
-    next: Link<T>,
+pub(crate) struct Node<T> {
+    pub(crate) elem: T,
+    pub(crate) next: Link<T>,
 }
 
 impl<T> List<T> {
@@ -43,6 +43,67 @@ impl<T> Drop for List<T> {
         while let Some(mut e) = cur {
             cur = e.next.take();
         }
+    }
+}
+
+// IntoIter, which will take the ownership of T
+pub struct IntoIter<T>(List<T>);
+impl<T> List<T> {
+    pub fn into_iter(self) -> IntoIter<T> {
+        IntoIter(self)
+    }
+}
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.pop()
+    }
+}
+
+// Iter, which will get a **reference** of list.
+// We use consider the lifetime of this reference to prevent dangling reference.
+pub struct Iter<'a, T> {
+    next: Option<&'a Node<T>>,
+}
+impl<T> List<T> {
+    pub fn iter(&self) -> Iter<T> {
+        Iter {
+            // next: self.head.as_ref().map(|e| &**e),
+            next: self.head.as_deref(),
+        }
+    }
+}
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next.map(|e| {
+            self.next = e.next.as_deref();
+            &e.elem
+        })
+    }
+}
+
+// IterMut, which will get a **mutable reference** of list.
+// We use consider the lifetime of this reference to prevent dangling reference.
+pub struct IterMut<'a, T> {
+    next: Option<&'a mut Node<T>>,
+}
+impl<T> List<T> {
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut {
+            // next: self.head.as_ref().map(|e| &**e),
+            next: self.head.as_deref_mut(),
+        }
+    }
+}
+impl<'a, T> Iterator for IterMut<'a, T> {
+    type Item = &'a mut T;
+    fn next(&mut self) -> Option<Self::Item> {
+        // Since we cannot **Copy** the `&mut T`, use `take()`
+        self.next.take().map(|e| {
+            self.next = e.next.as_deref_mut();
+            &mut e.elem
+        })
     }
 }
 
@@ -102,5 +163,53 @@ mod test {
 
         assert_eq!(list.peek(), Some(&42));
         assert_eq!(list.pop(), Some(42));
+    }
+    #[test]
+    fn into_iter() {
+        let mut list = List::new();
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        let mut iter = list.into_iter();
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn iter() {
+        let mut list = List::new();
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&3));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&1));
+    }
+
+    #[test]
+    fn iter_mut() {
+        let mut list = List::new();
+        list.push(1);
+        list.push(2);
+        list.push(3);
+
+        let mut iter = list.iter_mut();
+        assert_eq!(iter.next(), Some(&mut 3));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), Some(&mut 1));
+
+        let mut iter = list.iter_mut();
+        while let Some(e) = iter.next() {
+            *e *= 2;
+        }
+        let mut iter = list.iter_mut();
+        assert_eq!(iter.next(), Some(&mut 6));
+        assert_eq!(iter.next(), Some(&mut 4));
+        assert_eq!(iter.next(), Some(&mut 2));
     }
 }
